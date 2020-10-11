@@ -192,7 +192,7 @@ module FastJsonapi
 
             known_included_objects << code
 
-            included_records << serializer.record_hash(inc_obj, fieldsets[record_type], includes_list, params)
+            included_records << serializer.record_hash(inc_obj, fieldsets[record_type], include_item.last&.to_a&.map(&:to_sym), params)
           end
         end
       end
