@@ -1,23 +1,29 @@
-require 'active_record'
-require 'fast_jsonapi'
-require 'rspec-benchmark'
-require 'byebug'
-require 'active_model_serializers'
-require 'oj'
-require 'jsonapi/serializable'
-require 'jsonapi-serializers'
+require 'simplecov'
 
-Dir[File.dirname(__FILE__) + '/shared/contexts/*.rb'].each {|file| require file }
-Dir[File.dirname(__FILE__) + '/shared/examples/*.rb'].each {|file| require file }
+SimpleCov.start do
+  add_group 'Lib', 'lib'
+  add_group 'Tests', 'spec'
+end
+SimpleCov.minimum_coverage 90
+
+require 'active_support/core_ext/object/json'
+require 'jsonapi/serializer'
+require 'ffaker'
+require 'rspec'
+require 'jsonapi/rspec'
+require 'byebug'
+require 'securerandom'
+
+Dir[File.expand_path('spec/fixtures/*.rb')].sort.each { |f| require f }
 
 RSpec.configure do |config|
-  config.include RSpec::Benchmark::Matchers
-  if ENV['TRAVIS'] == 'true' || ENV['TRAVIS'] == true
-    config.filter_run_excluding performance: true
+  config.include JSONAPI::RSpec
+
+  config.mock_with :rspec
+  config.filter_run_when_matching :focus
+  config.disable_monkey_patching!
+
+  config.expect_with :rspec do |c|
+    c.syntax = :expect
   end
 end
-
-Oj.optimize_rails
-ActiveModel::Serializer.config.adapter = :json_api
-ActiveModel::Serializer.config.key_transform = :underscore
-ActiveModelSerializers.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new('/dev/null'))

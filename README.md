@@ -1,24 +1,23 @@
-# Fast JSON API
+# JSON:API Serialization Library
 
-[![Build Status](https://travis-ci.org/Netflix/fast_jsonapi.svg?branch=master)](https://travis-ci.org/Netflix/fast_jsonapi)
+A fast [JSON:API](https://jsonapi.org/) serializer for Ruby Objects.
 
-A lightning fast [JSON:API](http://jsonapi.org/) serializer for Ruby Objects.
+Previously this project was called **fast_jsonapi**, we forked the project
+and renamed it to **jsonapi/serializer** in order to keep it alive.
 
-Note: this gem deals only with implementing the JSON:API spec. If your API
-responses are not formatted according to the JSON:API spec, this library will
-not work for you.
+We would like to thank the Netflix team for the initial work and to all our
+contributors and users for the continuous support!
 
 # Performance Comparison
 
-We compare serialization times with Active Model Serializer as part of RSpec performance tests included on this library. We want to ensure that with every change on this library, serialization time is at least `25 times` faster than Active Model Serializers on up to current benchmark of 1000 records. Please read the [performance document](https://github.com/Netflix/fast_jsonapi/blob/master/performance_methodology.md) for any questions related to methodology.
+We compare serialization times with `ActiveModelSerializer` and alternative
+implementations as part of performance tests available at
+[jsonapi-serializer/comparisons](https://github.com/jsonapi-serializer/comparisons).
 
-## Benchmark times for 250 records
-
-```bash
-$ rspec
-Active Model Serializer serialized 250 records in 138.71 ms
-Fast JSON API serialized 250 records in 3.01 ms
-```
+We want to ensure that with every
+change on this library, serialization time stays significantly faster than
+the performance provided by the alternatives. Please read the performance
+article in the `docs` folder for any questions related to methodology.
 
 # Table of Contents
 
@@ -36,8 +35,11 @@ Fast JSON API serialized 250 records in 3.01 ms
   * [Params](#params)
   * [Conditional Attributes](#conditional-attributes)
   * [Conditional Relationships](#conditional-relationships)
+  * [Specifying a Relationship Serializer](#specifying-a-relationship-serializer)
   * [Sparse Fieldsets](#sparse-fieldsets)
   * [Using helper methods](#using-helper-methods)
+* [Performance Instrumentation](#performance-instrumentation)
+* [Deserialization](#deserialization)
 * [Contributing](#contributing)
 
 
@@ -54,7 +56,7 @@ Fast JSON API serialized 250 records in 3.01 ms
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'fast_jsonapi', '~> 1.6.0', git: 'https://github.com/fast-jsonapi/fast_jsonapi'
+gem 'jsonapi-serializer'
 ```
 
 Execute:
@@ -85,7 +87,8 @@ end
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
+
   set_type :movie  # optional
   set_id :owner_id # optional
   attributes :name, :year
@@ -127,7 +130,7 @@ hash = MovieSerializer.new(movie).serializable_hash
 
 #### Return Serialized JSON
 ```ruby
-json_string = MovieSerializer.new(movie).serialized_json
+json_string = MovieSerializer.new(movie).serializable_hash.to_json
 ```
 
 #### Serialized Output
@@ -166,12 +169,16 @@ json_string = MovieSerializer.new(movie).serialized_json
 
 ```
 
+#### The Optionality of `set_type`
+By default fast_jsonapi will try to figure the type based on the name of the serializer class. For example `class MovieSerializer` will automatically have a type of `:movie`. If your serializer class name does not follow this format, you have to manually state the `set_type` at the serializer.
+
 ### Key Transforms
 By default fast_jsonapi underscores the key names. It supports the same key transforms that are supported by AMS. Here is the syntax of specifying a key transform
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
+
   # Available options :camel, :camel_lower, :dash, :underscore(default)
   set_key_transform :camel
 end
@@ -186,13 +193,13 @@ set_key_transform :underscore # "some_key" => "some_key"
 ```
 
 ### Attributes
-Attributes are defined in FastJsonapi using the `attributes` method.  This method is also aliased as `attribute`, which is useful when defining a single attribute.
+Attributes are defined using the `attributes` method.  This method is also aliased as `attribute`, which is useful when defining a single attribute.
 
 By default, attributes are read directly from the model property of the same name.  In this example, `name` is expected to be a property of the object being serialized:
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attribute :name
 end
@@ -202,7 +209,7 @@ Custom attributes that must be serialized but do not exist on the model can be d
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attributes :name, :year
 
@@ -216,7 +223,7 @@ The block syntax can also be used to override the property on the object:
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attribute :name do |object|
     "#{object.name} Part 2"
@@ -228,7 +235,7 @@ Attributes can also use a different name by passing the original method or acces
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attributes :name
 
@@ -237,7 +244,7 @@ end
 ```
 
 ### Links Per Object
-Links are defined in FastJsonapi using the `link` method. By default, links are read directly from the model property of the same name. In this example, `public_url` is expected to be a property of the object being serialized.
+Links are defined using the `link` method. By default, links are read directly from the model property of the same name. In this example, `public_url` is expected to be a property of the object being serialized.
 
 You can configure the method to use on the object for example a link with key `self` will get set to the value returned by a method called `url` on the movie object.
 
@@ -245,29 +252,29 @@ You can also use a block to define a url as shown in `custom_url`. You can acces
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   link :public_url
 
   link :self, :url
 
   link :custom_url do |object|
-    "http://movies.com/#{object.name}-(#{object.year})"
+    "https://movies.com/#{object.name}-(#{object.year})"
   end
 
   link :personalized_url do |object, params|
-    "http://movies.com/#{object.name}-#{params[:user].reference_code}"
+    "https://movies.com/#{object.name}-#{params[:user].reference_code}"
   end
 end
 ```
 
 #### Links on a Relationship
 
-You can specify [relationship links](http://jsonapi.org/format/#document-resource-object-relationships) by using the `links:` option on the serializer. Relationship links in JSON API are useful if you want to load a parent document and then load associated documents later due to size constraints (see [related resource links](http://jsonapi.org/format/#document-resource-object-related-resource-links))
+You can specify [relationship links](https://jsonapi.org/format/#document-resource-object-relationships) by using the `links:` option on the serializer. Relationship links in JSON API are useful if you want to load a parent document and then load associated documents later due to size constraints (see [related resource links](https://jsonapi.org/format/#document-resource-object-related-resource-links))
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   has_many :actors, links: {
     self: :url,
@@ -302,7 +309,7 @@ For every resource in the collection, you can include a meta object containing n
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   meta do |movie|
     {
@@ -312,9 +319,26 @@ class MovieSerializer
 end
 ```
 
+#### Meta on a Relationship
+
+You can specify [relationship meta](https://jsonapi.org/format/#document-resource-object-relationships) by using the `meta:` option on the serializer. Relationship meta in JSON API is useful if you wish to provide non-standard meta-information about the relationship.
+
+Meta can be defined either by passing a static hash or by using Proc to the `meta` key. In the latter case, the record and any params passed to the serializer are available inside the Proc as the first and second parameters, respectively.
+
+
+```ruby
+class MovieSerializer
+  include JSONAPI::Serializer
+
+  has_many :actors, meta: Proc.new do |movie_record, params|
+    { count: movie_record.actors.length }
+  end
+end
+```
+
 ### Compound Document
 
-Support for top-level and nested included associations through ` options[:include] `.
+Support for top-level and nested included associations through `options[:include]`.
 
 ```ruby
 options = {}
@@ -325,7 +349,7 @@ options[:links] = {
   prev: '...'
 }
 options[:include] = [:actors, :'actors.agency', :'actors.agency.state']
-MovieSerializer.new(movies, options).serialized_json
+MovieSerializer.new(movies, options).serializable_hash.to_json
 ```
 
 ### Collection Serialization
@@ -338,7 +362,7 @@ options[:links] = {
   prev: '...'
 }
 hash = MovieSerializer.new(movies, options).serializable_hash
-json_string = MovieSerializer.new(movies, options).serialized_json
+json_string = MovieSerializer.new(movies, options).serializable_hash.to_json
 ```
 
 #### Control Over Collection Serialization
@@ -362,16 +386,49 @@ was introduced to be able to have precise control this behavior
 - `false` will always treat input resource as *single object*
 
 ### Caching
-Requires a `cache_key` method be defined on model:
+
+To enable caching, use `cache_options store: <cache_store>`:
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
-  set_type :movie  # optional
-  cache_options enabled: true, cache_length: 12.hours
-  attributes :name, :year
+  include JSONAPI::Serializer
+
+  # use rails cache with a separate namespace and fixed expiry
+  cache_options store: Rails.cache, namespace: 'jsonapi-serializer', expires_in: 1.hour
 end
 ```
+
+`store` is required can be anything that implements a
+`#fetch(record, **options, &block)` method:
+
+- `record` is the record that is currently serialized
+- `options` is everything that was passed to `cache_options` except `store`, so it can be everyhing the cache store supports
+- `&block` should be executed to fetch new data if cache is empty
+
+So for the example above it will call the cache instance like this:
+
+```ruby
+Rails.cache.fetch(record, namespace: 'jsonapi-serializer', expires_in: 1.hour) { ... }
+```
+
+#### Caching and Sparse Fieldsets
+
+If caching is enabled and fields are provided to the serializer, the fieldset will be appended to the cache key's namespace.
+
+For example, given the following serializer definition and instance:
+```ruby
+class ActorSerializer
+  include JSONAPI::Serializer
+
+  attributes :first_name, :last_name
+
+  cache_options store: Rails.cache, namespace: 'jsonapi-serializer', expires_in: 1.hour
+end
+
+serializer = ActorSerializer.new(actor, { fields: { actor: [:first_name] } })
+```
+
+The following cache namespace will be generated: `'jsonapi-serializer-fieldset:first_name'`.
 
 ### Params
 
@@ -387,7 +444,7 @@ parameter.
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   set_id do |movie, params|
     # in here, params is a hash containing the `:admin` key
@@ -421,7 +478,7 @@ Conditional attributes can be defined by passing a Proc to the `if` key on the `
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attributes :name, :year
   attribute :release_year, if: Proc.new { |record|
@@ -433,6 +490,13 @@ class MovieSerializer
     # The director will be serialized only if the :admin key of params is true
     params && params[:admin] == true
   }
+
+  # Custom attribute `name_year` will only be serialized if both `name` and `year` fields are present
+  attribute :name_year, if: Proc.new { |record|
+    record.name.present? && record.year.present?
+  } do |object|
+    "#{object.name} - #{object.year}"
+  end
 end
 
 # ...
@@ -447,7 +511,7 @@ Conditional relationships can be defined by passing a Proc to the `if` key. Retu
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   # Actors will only be serialized if the record has any associated actors
   has_many :actors, if: Proc.new { |record| record.actors.any? }
@@ -462,13 +526,59 @@ serializer = MovieSerializer.new(movie, { params: { admin: current_user.admin? }
 serializer.serializable_hash
 ```
 
+### Specifying a Relationship Serializer
+
+In many cases, the relationship can automatically detect the serializer to use.
+
+```ruby
+class MovieSerializer
+  include JSONAPI::Serializer
+
+  # resolves to StudioSerializer
+  belongs_to :studio
+  # resolves to ActorSerializer
+  has_many :actors
+end
+```
+
+At other times, such as when a property name differs from the class name, you may need to explicitly state the serializer to use.  You can do so by specifying a different symbol or the serializer class itself (which is the recommended usage):
+
+```ruby
+class MovieSerializer
+  include JSONAPI::Serializer
+
+  # resolves to MovieStudioSerializer
+  belongs_to :studio, serializer: :movie_studio
+  # resolves to PerformerSerializer
+  has_many :actors, serializer: PerformerSerializer
+end
+```
+
+For more advanced cases, such as polymorphic relationships and Single Table Inheritance, you may need even greater control to select the serializer based on the specific object or some specified serialization parameters. You can do by defining the serializer as a `Proc`:
+
+```ruby
+class MovieSerializer
+  include JSONAPI::Serializer
+
+  has_many :actors, serializer: Proc.new do |record, params|
+    if record.comedian?
+      ComedianSerializer
+    elsif params[:use_drama_serializer]
+      DramaSerializer
+    else
+      ActorSerializer
+    end
+  end
+end
+```
+
 ### Sparse Fieldsets
 
 Attributes and relationships can be selectively returned per record type by using the `fields` option.
 
 ```ruby
 class MovieSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   attributes :name, :year
 end
@@ -499,7 +609,7 @@ module AvatarHelper
 end
 
 class UserSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   include AvatarHelper # mixes in your helper method as class method
 
@@ -524,7 +634,7 @@ module AvatarHelper
 end
 
 class UserSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
 
   extend AvatarHelper # mixes in your helper method as class method
 
@@ -543,66 +653,64 @@ end
 
 Option | Purpose | Example
 ------------ | ------------- | -------------
-set_type | Type name of Object | ```set_type :movie ```
-key | Key of Object | ```belongs_to :owner, key: :user ```
-set_id | ID of Object | ```set_id :owner_id ``` or ```set_id { \|record, params\| params[:admin] ? record.id : "#{record.name.downcase}-#{record.id}" }```
-cache_options | Hash to enable caching and set cache length | ```cache_options enabled: true, cache_length: 12.hours, race_condition_ttl: 10.seconds```
-id_method_name | Set custom method name to get ID of an object (If block is provided for the relationship, `id_method_name` is invoked on the return value of the block instead of the resource object) | ```has_many :locations, id_method_name: :place_ids ```
-object_method_name | Set custom method name to get related objects | ```has_many :locations, object_method_name: :places ```
-record_type | Set custom Object Type for a relationship | ```belongs_to :owner, record_type: :user```
-serializer | Set custom Serializer for a relationship | ```has_many :actors, serializer: :custom_actor``` or ```has_many :actors, serializer: MyApp::Api::V1::ActorSerializer```
-polymorphic | Allows different record types for a polymorphic association | ```has_many :targets, polymorphic: true```
-polymorphic | Sets custom record types for each object class in a polymorphic association | ```has_many :targets, polymorphic: { Person => :person, Group => :group }```
+set_type | Type name of Object | `set_type :movie`
+key | Key of Object | `belongs_to :owner, key: :user`
+set_id | ID of Object | `set_id :owner_id` or `set_id { \|record, params\| params[:admin] ? record.id : "#{record.name.downcase}-#{record.id}" }`
+cache_options | Hash with store to enable caching and optional further cache options | `cache_options store: ActiveSupport::Cache::MemoryStore.new, expires_in: 5.minutes`
+id_method_name | Set custom method name to get ID of an object (If block is provided for the relationship, `id_method_name` is invoked on the return value of the block instead of the resource object) | `has_many :locations, id_method_name: :place_ids`
+object_method_name | Set custom method name to get related objects | `has_many :locations, object_method_name: :places`
+record_type | Set custom Object Type for a relationship | `belongs_to :owner, record_type: :user`
+serializer | Set custom Serializer for a relationship | `has_many :actors, serializer: :custom_actor`, `has_many :actors, serializer: MyApp::Api::V1::ActorSerializer`, or `has_many :actors, serializer -> (object, params) { (return a serializer class) }`
+polymorphic | Allows different record types for a polymorphic association | `has_many :targets, polymorphic: true`
+polymorphic | Sets custom record types for each object class in a polymorphic association | `has_many :targets, polymorphic: { Person => :person, Group => :group }`
 
-### Instrumentation
+### Performance Instrumentation
 
-`fast_jsonapi` also has builtin [Skylight](https://www.skylight.io/) integration. To enable, add the following to an initializer:
+Performance instrumentation is available by using the
+`active_support/notifications`.
 
-```ruby
-require 'fast_jsonapi/instrumentation/skylight'
-```
-
-Skylight relies on `ActiveSupport::Notifications` to track these two core methods. If you would like to use these notifications without using Skylight, simply require the instrumentation integration:
+To enable it, include the module in your serializer class:
 
 ```ruby
-require 'fast_jsonapi/instrumentation'
+require 'jsonapi/serializer'
+require 'jsonapi/serializer/instrumentation'
+
+class MovieSerializer
+  include JSONAPI::Serializer
+  include JSONAPI::Serializer::Instrumentation
+
+  # ...
+end
 ```
 
-The two instrumented notifications are supplied by these two constants:
-* `FastJsonapi::ObjectSerializer::SERIALIZABLE_HASH_NOTIFICATION`
-* `FastJsonapi::ObjectSerializer::SERIALIZED_JSON_NOTIFICATION`
-
-It is also possible to instrument one method without the other by using one of the following require statements:
-
-```ruby
-require 'fast_jsonapi/instrumentation/serializable_hash'
-require 'fast_jsonapi/instrumentation/serialized_json'
-```
-
-Same goes for the Skylight integration:
-```ruby
-require 'fast_jsonapi/instrumentation/skylight/normalizers/serializable_hash'
-require 'fast_jsonapi/instrumentation/skylight/normalizers/serialized_json'
-```
-
-## Contributing
-Please see [contribution check](https://github.com/Netflix/fast_jsonapi/blob/master/CONTRIBUTING.md) for more details on contributing
+[Skylight](https://www.skylight.io/) integration is also available and
+supported by us, follow the Skylight documentation to enable it.
 
 ### Running Tests
-We use [RSpec](http://rspec.info/) for testing. We have unit tests, functional tests and performance tests. To run tests use the following command:
+The project has and requires unit tests, functional tests and performance
+tests. To run tests use the following command:
 
 ```bash
 rspec
 ```
 
-To run tests without the performance tests (for quicker test runs):
+## Deserialization
+We currently do not support deserialization, but we recommend to use any of the next gems:
 
-```bash
-rspec spec --tag ~performance:true
-```
+### [JSONAPI.rb](https://github.com/stas/jsonapi.rb)
 
-To run tests only performance tests:
+This gem provides the next features alongside deserialization:
+- Collection meta
+- Error handling
+- Includes and sparse fields
+- Filtering and sorting
+- Pagination
 
-```bash
-rspec spec --tag performance:true
-```
+## Contributing
+
+Please follow the instructions we provide as part of the issue and
+pull request creation processes.
+
+This project is intended to be a safe, welcoming space for collaboration, and
+contributors are expected to adhere to the
+[Contributor Covenant](https://contributor-covenant.org) code of conduct.

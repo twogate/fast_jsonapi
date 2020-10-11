@@ -1,0 +1,78 @@
+require:
+  - rubocop-performance
+  - rubocop-rspec
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/SymbolArray:
+  Enabled: false
+
+Style/WordArray:
+  Enabled: false
+
+Style/SymbolProc:
+  Exclude:
+    - 'spec/fixtures/*.rb'
+
+Lint/DuplicateMethods:
+  Exclude:
+    - 'spec/fixtures/*.rb'
+
+RSpec/FilePath:
+  Enabled: false
+
+RSpec/DescribedClass:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Enabled: false
+
+Performance/TimesMap:
+  Exclude:
+    - 'spec/**/**.rb'
+
+# TODO: Fix these...
+Style/Documentation:
+  Enabled: false
+
+Style/GuardClause:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Style/ConditionalAssignment:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Style/IfUnlessModifier:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Lint/AssignmentInCondition:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Metrics:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Metrics/BlockLength:
+  Enabled: false
+
+Layout/LineLength:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Naming/PredicateName:
+  Exclude:
+    - 'lib/**/**.rb'
+
+Naming/AccessorMethodName:
+  Exclude:
+    - 'lib/**/**.rb'
