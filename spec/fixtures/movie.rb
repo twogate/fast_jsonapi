@@ -26,7 +26,7 @@ class Movie
     @url ||= FFaker::Internet.http_url
     return @url if obj.nil?
 
-    @url + '?' + obj.hash.to_s
+    "#{@url}?#{obj.hash}"
   end
 
   def owner=(ownr)
@@ -48,8 +48,9 @@ class MovieSerializer
 
   set_type :movie
 
+  attribute :released_in_year, &:year
   attributes :name
-  attribute :release_year do |object|
+  attribute :release_year do |object, _params|
     object.year
   end
 
